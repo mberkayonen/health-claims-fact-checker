@@ -100,6 +100,15 @@ export default function VerdictCard({ verdict }: { verdict: Verdict }) {
         </div>
       )}
 
+      {/* Consensus note — shown when peer-reviewed sources were sparse */}
+      {verdict.consensusNote && (
+        <div className="animate-fade-slide-up-delay-2 bg-stone-50 border border-stone-200 rounded-xl p-4">
+          <p className="text-xs font-mono text-stone-500 uppercase tracking-widest mb-1.5">Scientific consensus context</p>
+          <p className="text-stone-600 text-sm leading-relaxed">{verdict.consensusNote}</p>
+          <p className="text-xs text-stone-400 mt-2 font-mono">Not from retrieved peer-reviewed sources.</p>
+        </div>
+      )}
+
       {/* Sources */}
       <div className="animate-fade-slide-up-delay-3">
         <p className="text-xs font-mono text-stone-400 uppercase tracking-widest mb-3">
