@@ -57,6 +57,8 @@ Respond ONLY with a JSON object, no markdown:
   }
 }
 
+export const MIN_SOURCES_FOR_VERDICT = 3
+
 // Step 2: generate verdict from retrieved sources
 export async function generateVerdict(
   extractedClaim: string,
@@ -71,10 +73,17 @@ Abstract: ${s.abstract}
 URL: ${s.url}
 `).join('\n---\n')
 
+  const validAbstractCount = sources.filter(s => s.abstract !== 'Abstract not available.').length
+  const sparseEvidence = validAbstractCount < MIN_SOURCES_FOR_VERDICT
+
+  const consensusFallbackInstruction = sparseEvidence
+    ? `\nIf the retrieved sources are insufficient to reach a verdict, you MAY add a brief "consensusNote" drawing on well-established scientific consensus — but ONLY for claims where consensus is genuinely unambiguous and widely accepted. Clearly label it as not from the retrieved sources. If no clear consensus exists, set consensusNote to null.`
+    : ''
+
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
-    system: `You are a scientific fact-checker. Your ONLY job is to assess health claims based strictly on the provided scientific sources. 
+    system: `You are a scientific fact-checker. Your ONLY job is to assess health claims based strictly on the provided scientific sources.
 
 CRITICAL RULES:
 - You may ONLY use the provided sources. Do not use any other knowledge.
@@ -82,7 +91,7 @@ CRITICAL RULES:
 - Never fabricate or embellish findings.
 - Use plain, everyday language in explanations — avoid jargon.
 - Be honest about uncertainty and limitations.
-- Evidence tiers matter: Systematic Reviews > Clinical Trials > Observational Studies > Expert Consensus.`,
+- Evidence tiers matter: Systematic Reviews > Clinical Trials > Observational Studies > Expert Consensus.${consensusFallbackInstruction}`,
     messages: [{
       role: 'user',
       content: `Assess this health claim based ONLY on the sources provided below.
@@ -98,6 +107,7 @@ Respond ONLY with a JSON object, no markdown:
   "explanation": "2-3 sentences in plain everyday language explaining what the evidence shows. No jargon. Write as if explaining to a friend.",
   "evidenceSummary": "1 sentence describing the quality and quantity of evidence (e.g. 'Based on two randomized controlled trials and one systematic review')",
   "caveats": "Important limitations, caveats, or context the reader should know — or null if none",
+  "consensusNote": "Brief plain-language note on scientific consensus if sources were insufficient — or null",
   "sourceIndices": [list of source index numbers (1-based) that were actually relevant to the verdict]
 }`
     }]
@@ -110,6 +120,7 @@ Respond ONLY with a JSON object, no markdown:
     explanation: string
     evidenceSummary: string
     caveats: string | null
+    consensusNote: string | null
     sourceIndices: number[]
   }
 
@@ -121,6 +132,7 @@ Respond ONLY with a JSON object, no markdown:
       explanation: 'We were unable to generate a verdict for this claim.',
       evidenceSummary: 'No evidence assessed.',
       caveats: null,
+      consensusNote: null,
       sourceIndices: [],
     }
   }
@@ -133,7 +145,8 @@ Respond ONLY with a JSON object, no markdown:
     label: parsed.label,
     explanation: parsed.explanation,
     evidenceSummary: parsed.evidenceSummary,
-    caveats: parsed.caveats,
+    caveats: parsed.caveats ?? null,
+    consensusNote: parsed.consensusNote ?? null,
     sources: relevantSources.length > 0 ? relevantSources : sources.slice(0, 3),
     extractedClaim,
   }
