@@ -137,7 +137,7 @@ Respond ONLY with a JSON object, no markdown:
     }
   }
 
-  if (parsed.label !== 'Insufficient Evidence') {
+  if (parsed.label !== 'Insufficient Evidence' || !sparseEvidence) {
     parsed.consensusNote = null
   }
 

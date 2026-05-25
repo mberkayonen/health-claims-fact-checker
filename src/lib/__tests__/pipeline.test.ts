@@ -183,4 +183,30 @@ describe('generateVerdict', () => {
     expect(result.label).toBe('Supported')
     expect(result.consensusNote).toBeNull()
   })
+
+  it('nulls out consensusNote when evidence is not sparse, even if label is Insufficient Evidence', async () => {
+    const sources = [
+      makeSource('40', REAL_ABSTRACT),
+      makeSource('41', REAL_ABSTRACT),
+      makeSource('42', REAL_ABSTRACT),
+    ]
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          label: 'Insufficient Evidence',
+          explanation: 'The evidence is inconclusive.',
+          evidenceSummary: 'Based on three studies.',
+          caveats: null,
+          consensusNote: 'Claude tried to sneak this in despite adequate sources.',
+          sourceIndices: [1, 2, 3],
+        }),
+      }],
+    })
+
+    const result = await generateVerdict('Some well-studied claim', sources)
+
+    expect(result.consensusNote).toBeNull()
+  })
 })
