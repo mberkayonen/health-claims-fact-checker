@@ -3,7 +3,8 @@ import { extractAndValidateClaim, generateVerdict } from '@/lib/pipeline'
 import { searchPubMed } from '@/lib/pubmed'
 import { searchCochrane } from '@/lib/cochrane'
 import { searchWhoIris } from '@/lib/whoiris'
-import { CheckResponse, Source } from '@/lib/types'
+import { deduplicateSources } from '@/lib/sources'
+import { CheckResponse } from '@/lib/types'
 
 export const maxDuration = 60
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       )
     }
 
-    const { isHealthClaim, extractedClaim, searchQuery, reason } = await extractAndValidateClaim(claim.trim())
+    const { isHealthClaim, extractedClaim, searchQueries, reason } = await extractAndValidateClaim(claim.trim())
 
     if (!isHealthClaim) {
       return NextResponse.json(
@@ -38,21 +39,27 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       )
     }
 
-    const [pubmedSources, cochraneSources, whoSources] = await Promise.all([
-      searchPubMed(searchQuery),
-      searchCochrane(searchQuery),
-      searchWhoIris(searchQuery),
-    ])
+    // Fan out: 3 sources × N queries = 3N parallel fetches.
+    // Order within each group is [PubMed, Cochrane, WHO] so the index modulo
+    // pattern below correctly separates them for Cochrane-precedence dedup.
+    const allResults = await Promise.all(
+      searchQueries.flatMap(query => [
+        searchPubMed(query),
+        searchCochrane(query),
+        searchWhoIris(query),
+      ])
+    )
 
-    // Cochrane results take precedence over PubMed for the same PMID
-    const seenIds = new Set<string>()
-    const sources: Source[] = []
-    for (const source of [...cochraneSources, ...pubmedSources, ...whoSources]) {
-      if (!seenIds.has(source.id)) {
-        seenIds.add(source.id)
-        sources.push(source)
-      }
-    }
+    const pubmedBatches = allResults.filter((_, i) => i % 3 === 0)
+    const cochraneBatches = allResults.filter((_, i) => i % 3 === 1)
+    const whoBatches = allResults.filter((_, i) => i % 3 === 2)
+
+    // Cochrane listed first so deduplicateSources gives it precedence over PubMed
+    const sources = deduplicateSources([
+      ...cochraneBatches.flat(),
+      ...pubmedBatches.flat(),
+      ...whoBatches.flat(),
+    ])
 
     const verdict = await generateVerdict(extractedClaim, sources)
 
