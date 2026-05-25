@@ -137,6 +137,10 @@ Respond ONLY with a JSON object, no markdown:
     }
   }
 
+  if (parsed.label !== 'Insufficient Evidence') {
+    parsed.consensusNote = null
+  }
+
   const relevantSources = parsed.sourceIndices
     .map(i => sources[i - 1])
     .filter(Boolean)
