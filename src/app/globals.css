@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Verdict badge animations */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.4s ease forwards;
+}
+
+.animate-fade-slide-up-delay-1 {
+  animation: fadeSlideUp 0.4s ease 0.1s forwards;
+  opacity: 0;
+}
+
+.animate-fade-slide-up-delay-2 {
+  animation: fadeSlideUp 0.4s ease 0.2s forwards;
+  opacity: 0;
+}
+
+.animate-fade-slide-up-delay-3 {
+  animation: fadeSlideUp 0.4s ease 0.3s forwards;
+  opacity: 0;
+}
+
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    #e7e5e0 25%,
+    #f5f4f1 50%,
+    #e7e5e0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Textarea focus ring */
+textarea:focus {
+  outline: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d6d3cd;
+  border-radius: 3px;
+}
