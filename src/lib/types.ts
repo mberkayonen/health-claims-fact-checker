@@ -17,6 +17,7 @@ export interface Verdict {
   explanation: string
   evidenceSummary: string
   caveats: string | null
+  consensusNote: string | null
   sources: Source[]
   extractedClaim: string
 }
