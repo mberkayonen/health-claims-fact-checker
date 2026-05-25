@@ -11,12 +11,12 @@ function stripMarkdownJson(text: string): string {
 export async function extractAndValidateClaim(userInput: string): Promise<{
   isHealthClaim: boolean
   extractedClaim: string
-  searchQuery: string
+  searchQueries: string[]
   reason?: string
 }> {
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 500,
+    max_tokens: 600,
     messages: [{
       role: 'user',
       content: `You are a claim analysis assistant. Your job is to determine if the following input contains a health or medical claim, and if so, extract it cleanly.
@@ -35,7 +35,11 @@ Respond ONLY with a JSON object, no markdown:
 {
   "isHealthClaim": true/false,
   "extractedClaim": "the core falsifiable claim in one clear sentence, or empty string if not a health claim",
-  "searchQuery": "optimized PubMed search query (use MeSH terms where appropriate), or empty string",
+  "searchQueries": [
+    "specific MeSH/clinical PubMed query using MeSH terms where appropriate",
+    "broader synonym-based query covering alternative terminology for the same concept",
+    "guideline or recommendation-focused query (e.g. including terms like guidelines, recommendations, consensus)"
+  ],
   "reason": "if not a health claim, briefly explain why"
 }`
     }]
@@ -43,9 +47,13 @@ Respond ONLY with a JSON object, no markdown:
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
   try {
-    return JSON.parse(stripMarkdownJson(text))
+    const parsed = JSON.parse(stripMarkdownJson(text))
+    if (!Array.isArray(parsed.searchQueries)) {
+      parsed.searchQueries = parsed.searchQuery ? [parsed.searchQuery] : []
+    }
+    return parsed
   } catch {
-    return { isHealthClaim: false, extractedClaim: '', searchQuery: '', reason: 'Could not parse claim.' }
+    return { isHealthClaim: false, extractedClaim: '', searchQueries: [], reason: 'Could not parse claim.' }
   }
 }
 
