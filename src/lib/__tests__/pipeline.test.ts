@@ -8,7 +8,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   })),
 }))
 
-import { extractAndValidateClaim, generateVerdict } from '../pipeline'
+import { extractAndValidateClaim, generateVerdict, generateEstablishedVerdict } from '../pipeline'
 import type { Source } from '../types'
 
 describe('extractAndValidateClaim', () => {
@@ -66,6 +66,70 @@ describe('extractAndValidateClaim', () => {
 
     expect(result.isHealthClaim).toBe(false)
     expect(result.searchQueries).toEqual([])
+  })
+
+  it('returns claimType established for a basic biology claim', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          isHealthClaim: true,
+          claimType: 'established',
+          extractedClaim: 'Humans need water to survive',
+          searchQueries: [
+            'water human physiology requirements',
+            'hydration human body necessity',
+            'water intake survival guidelines',
+          ],
+        }),
+      }],
+    })
+
+    const result = await extractAndValidateClaim('humans need water')
+
+    expect(result.isHealthClaim).toBe(true)
+    expect(result.claimType).toBe('established')
+  })
+
+  it('returns claimType research for a nuanced intervention claim', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          isHealthClaim: true,
+          claimType: 'research',
+          extractedClaim: "Coffee prevents Alzheimer's disease",
+          searchQueries: [
+            "coffee Alzheimer's prevention[MeSH]",
+            'caffeine cognitive decline risk',
+            "coffee dementia prevention guidelines",
+          ],
+        }),
+      }],
+    })
+
+    const result = await extractAndValidateClaim("coffee prevents Alzheimer's")
+
+    expect(result.isHealthClaim).toBe(true)
+    expect(result.claimType).toBe('research')
+  })
+
+  it('defaults claimType to research when Claude omits the field', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          isHealthClaim: true,
+          extractedClaim: 'Some health claim',
+          searchQueries: ['query one', 'query two', 'query three'],
+          // claimType deliberately omitted
+        }),
+      }],
+    })
+
+    const result = await extractAndValidateClaim('some health claim')
+
+    expect(result.claimType).toBe('research')
   })
 })
 
@@ -208,5 +272,42 @@ describe('generateVerdict', () => {
     const result = await generateVerdict('Some well-studied claim', sources)
 
     expect(result.consensusNote).toBeNull()
+  })
+})
+
+describe('generateEstablishedVerdict', () => {
+  it('returns an Established Science verdict with context and empty sources', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          explanation: 'Yes, water is essential for life. Your body uses it for digestion, temperature regulation, and carrying nutrients to cells. Without adequate water, organs fail within days.',
+          context: 'This is foundational human physiology, not a contested research question.',
+          caveats: null,
+        }),
+      }],
+    })
+
+    const result = await generateEstablishedVerdict('Humans need water to survive')
+
+    expect(result.label).toBe('Established Science')
+    expect(result.sources).toEqual([])
+    expect(result.context).toBe('This is foundational human physiology, not a contested research question.')
+    expect(result.consensusNote).toBeNull()
+    expect(result.extractedClaim).toBe('Humans need water to survive')
+    expect(result.explanation).toContain('water is essential')
+  })
+
+  it('falls back to default text when Claude returns malformed JSON', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'not valid json at all' }],
+    })
+
+    const result = await generateEstablishedVerdict('Exercise is good for health')
+
+    expect(result.label).toBe('Established Science')
+    expect(result.sources).toEqual([])
+    expect(result.context).not.toBeNull()
+    expect(result.explanation).toBeTruthy()
   })
 })

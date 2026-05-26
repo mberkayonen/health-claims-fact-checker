@@ -1,4 +1,9 @@
-export type VerdictLabel = 'Supported' | 'Contested' | 'Contradicted' | 'Insufficient Evidence'
+export type VerdictLabel =
+  | 'Supported'
+  | 'Contested'
+  | 'Contradicted'
+  | 'Insufficient Evidence'
+  | 'Established Science'
 
 export interface Source {
   id: string
@@ -18,6 +23,7 @@ export interface Verdict {
   evidenceSummary: string
   caveats: string | null
   consensusNote: string | null
+  context: string | null
   sources: Source[]
   extractedClaim: string
 }
