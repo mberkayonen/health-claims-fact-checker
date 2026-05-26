@@ -97,11 +97,13 @@ export default function VerdictCard({ verdict }: { verdict: Verdict }) {
         )}
       </div>
 
-      {/* Evidence quality */}
-      <div className="animate-fade-slide-up-delay-2">
-        <p className="text-xs font-mono text-stone-400 uppercase tracking-widest mb-2">Evidence quality</p>
-        <p className="text-stone-600 text-sm">{verdict.evidenceSummary}</p>
-      </div>
+      {/* Evidence quality — hidden for Established Science which has no sourced evidence */}
+      {verdict.sources.length > 0 && (
+        <div className="animate-fade-slide-up-delay-2">
+          <p className="text-xs font-mono text-stone-400 uppercase tracking-widest mb-2">Evidence quality</p>
+          <p className="text-stone-600 text-sm">{verdict.evidenceSummary}</p>
+        </div>
+      )}
 
       {/* Caveats */}
       {verdict.caveats && (

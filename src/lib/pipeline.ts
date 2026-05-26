@@ -208,7 +208,7 @@ Respond ONLY with a JSON object, no markdown:
 
   return {
     label: 'Established Science',
-    explanation: parsed.explanation,
+    explanation: parsed.explanation ?? 'This is a well-established scientific fact supported by foundational biology and medicine.',
     evidenceSummary: 'This is foundational science — not a contested research question.',
     caveats: parsed.caveats ?? null,
     consensusNote: null,
