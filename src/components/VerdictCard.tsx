@@ -42,6 +42,14 @@ const VERDICT_CONFIG: Record<VerdictLabel, {
     label: 'Insufficient evidence',
     description: 'Not enough research exists to make a determination.',
   },
+  'Established Science': {
+    bg: 'bg-teal-50',
+    border: 'border-teal-200',
+    text: 'text-teal-800',
+    dot: 'bg-teal-500',
+    label: 'Established science',
+    description: 'This is foundational biology or medicine — not a contested research question.',
+  },
 }
 
 const TIER_ORDER = ['Systematic Review', 'Clinical Trial', 'Observational Study', 'Expert Consensus', 'Unknown']
@@ -84,6 +92,9 @@ export default function VerdictCard({ verdict }: { verdict: Verdict }) {
           <span className={`font-display text-xl ${config.text}`}>{config.label}</span>
         </div>
         <p className="text-stone-700 leading-relaxed">{verdict.explanation}</p>
+        {verdict.context && (
+          <p className="text-sm text-teal-700 mt-2 italic">{verdict.context}</p>
+        )}
       </div>
 
       {/* Evidence quality */}
@@ -109,49 +120,53 @@ export default function VerdictCard({ verdict }: { verdict: Verdict }) {
         </div>
       )}
 
-      {/* Sources */}
-      <div className="animate-fade-slide-up-delay-3">
-        <p className="text-xs font-mono text-stone-400 uppercase tracking-widest mb-3">
-          Sources consulted ({verdict.sources.length})
-        </p>
-        <div className="space-y-3">
-          {verdict.sources.map((source, i) => (
-            <a
-              key={source.id}
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block border border-stone-200 rounded-xl p-4 hover:border-stone-400 hover:bg-white transition-all duration-200 group"
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <span className="font-mono text-xs text-stone-400">#{i + 1}</span>
-                <EvidenceTierBadge tier={source.evidenceTier} />
-              </div>
-              <p className="text-stone-800 text-sm font-medium leading-snug mb-1 group-hover:text-stone-900">
-                {source.title}
-              </p>
-              <p className="text-xs text-stone-400 font-mono mb-2">
-                {source.journal} · {source.year}
-                {source.authors.length > 0 && ` · ${source.authors.slice(0, 2).join(', ')}${source.authors.length > 2 ? ' et al.' : ''}`}
-              </p>
-              {source.abstract && source.abstract !== 'Abstract not available.' && (
-                <p className="text-xs text-stone-500 leading-relaxed line-clamp-3">
-                  {source.abstract}
+      {/* Sources — hidden for Established Science verdicts which have no citations */}
+      {verdict.sources.length > 0 && (
+        <div className="animate-fade-slide-up-delay-3">
+          <p className="text-xs font-mono text-stone-400 uppercase tracking-widest mb-3">
+            Sources consulted ({verdict.sources.length})
+          </p>
+          <div className="space-y-3">
+            {verdict.sources.map((source, i) => (
+              <a
+                key={source.id}
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block border border-stone-200 rounded-xl p-4 hover:border-stone-400 hover:bg-white transition-all duration-200 group"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <span className="font-mono text-xs text-stone-400">#{i + 1}</span>
+                  <EvidenceTierBadge tier={source.evidenceTier} />
+                </div>
+                <p className="text-stone-800 text-sm font-medium leading-snug mb-1 group-hover:text-stone-900">
+                  {source.title}
                 </p>
-              )}
-              <p className="text-xs text-stone-400 mt-2 font-mono group-hover:text-stone-600 transition-colors">
-                {source.source} → Read full paper ↗
-              </p>
-            </a>
-          ))}
+                <p className="text-xs text-stone-400 font-mono mb-2">
+                  {source.journal} · {source.year}
+                  {source.authors.length > 0 && ` · ${source.authors.slice(0, 2).join(', ')}${source.authors.length > 2 ? ' et al.' : ''}`}
+                </p>
+                {source.abstract && source.abstract !== 'Abstract not available.' && (
+                  <p className="text-xs text-stone-500 leading-relaxed line-clamp-3">
+                    {source.abstract}
+                  </p>
+                )}
+                <p className="text-xs text-stone-400 mt-2 font-mono group-hover:text-stone-600 transition-colors">
+                  {source.source} → Read full paper ↗
+                </p>
+              </a>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Transparency footer */}
       <div className="animate-fade-slide-up-delay-3 border-t border-stone-200 pt-4">
         <p className="text-xs text-stone-400 leading-relaxed">
-          This verdict is generated by AI and grounded only in the sources listed above from PubMed/MEDLINE, Cochrane Database, and WHO IRIS.
-          It is not medical advice. Always consult a healthcare professional for personal health decisions.
+          {verdict.sources.length > 0
+            ? 'This verdict is generated by AI and grounded only in the sources listed above from PubMed/MEDLINE, Cochrane Database, and WHO IRIS.'
+            : 'This verdict is generated by AI based on established scientific consensus.'}
+          {' '}It is not medical advice. Always consult a healthcare professional for personal health decisions.
         </p>
       </div>
     </div>

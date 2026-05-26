@@ -198,7 +198,7 @@ export default function HomePage() {
         {state === 'loading' && (
           <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
             <p className="text-xs font-mono text-stone-400 uppercase tracking-widest mb-6">
-              Searching PubMed and assessing evidence...
+              Checking your claim against the evidence...
             </p>
             <LoadingSkeleton />
           </div>
