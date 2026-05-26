@@ -151,6 +151,7 @@ Respond ONLY with a JSON object, no markdown:
     evidenceSummary: parsed.evidenceSummary,
     caveats: parsed.caveats ?? null,
     consensusNote: parsed.consensusNote ?? null,
+    context: null,
     sources: relevantSources.length > 0 ? relevantSources : sources.slice(0, 3),
     extractedClaim,
   }
