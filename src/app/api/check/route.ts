@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { extractAndValidateClaim, generateVerdict } from '@/lib/pipeline'
+import { extractAndValidateClaim, generateVerdict, generateEstablishedVerdict } from '@/lib/pipeline'
 import { searchPubMed } from '@/lib/pubmed'
 import { searchCochrane } from '@/lib/cochrane'
 import { searchWhoIris } from '@/lib/whoiris'
@@ -26,7 +26,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       )
     }
 
-    const { isHealthClaim, extractedClaim, searchQueries, reason } = await extractAndValidateClaim(claim.trim())
+    const { isHealthClaim, claimType, extractedClaim, searchQueries, reason } =
+      await extractAndValidateClaim(claim.trim())
 
     if (!isHealthClaim) {
       return NextResponse.json(
@@ -39,7 +40,18 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       )
     }
 
-    // Fan out: 3 sources × N queries = 3N parallel fetches.
+    // Fast path: established science needs no literature search
+    if (claimType === 'established') {
+      try {
+        const verdict = await generateEstablishedVerdict(extractedClaim)
+        return NextResponse.json({ success: true, verdict })
+      } catch (err) {
+        console.error('Established verdict failed, falling back to research pipeline:', err)
+        // fall through to research pipeline below
+      }
+    }
+
+    // Research path: fan out across 3 sources × N queries in parallel.
     // Order within each group is [PubMed, Cochrane, WHO] so the index modulo
     // pattern below correctly separates them for Cochrane-precedence dedup.
     const allResults = await Promise.all(
