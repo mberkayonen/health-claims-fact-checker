@@ -8,7 +8,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   })),
 }))
 
-import { extractAndValidateClaim, generateVerdict } from '../pipeline'
+import { extractAndValidateClaim, generateVerdict, generateEstablishedVerdict } from '../pipeline'
 import type { Source } from '../types'
 
 describe('extractAndValidateClaim', () => {
@@ -272,5 +272,42 @@ describe('generateVerdict', () => {
     const result = await generateVerdict('Some well-studied claim', sources)
 
     expect(result.consensusNote).toBeNull()
+  })
+})
+
+describe('generateEstablishedVerdict', () => {
+  it('returns an Established Science verdict with context and empty sources', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          explanation: 'Yes, water is essential for life. Your body uses it for digestion, temperature regulation, and carrying nutrients to cells. Without adequate water, organs fail within days.',
+          context: 'This is foundational human physiology, not a contested research question.',
+          caveats: null,
+        }),
+      }],
+    })
+
+    const result = await generateEstablishedVerdict('Humans need water to survive')
+
+    expect(result.label).toBe('Established Science')
+    expect(result.sources).toEqual([])
+    expect(result.context).toBe('This is foundational human physiology, not a contested research question.')
+    expect(result.consensusNote).toBeNull()
+    expect(result.extractedClaim).toBe('Humans need water to survive')
+    expect(result.explanation).toContain('water is essential')
+  })
+
+  it('falls back to default text when Claude returns malformed JSON', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'not valid json at all' }],
+    })
+
+    const result = await generateEstablishedVerdict('Exercise is good for health')
+
+    expect(result.label).toBe('Established Science')
+    expect(result.sources).toEqual([])
+    expect(result.context).not.toBeNull()
+    expect(result.explanation).toBeTruthy()
   })
 })

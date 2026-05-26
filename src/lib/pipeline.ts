@@ -165,3 +165,55 @@ Respond ONLY with a JSON object, no markdown:
     extractedClaim,
   }
 }
+
+export async function generateEstablishedVerdict(
+  extractedClaim: string
+): Promise<Verdict> {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 600,
+    system: `You are a friendly science communicator. Your job is to confirm well-established scientific facts in plain, accessible language for everyday people — not scientists. Be warm, clear, and informative.`,
+    messages: [{
+      role: 'user',
+      content: `Confirm this established health or biology fact and explain why it's true in plain language.
+
+CLAIM: "${extractedClaim}"
+
+Respond ONLY with a JSON object, no markdown:
+{
+  "explanation": "2-3 sentences confirming the claim and explaining why it's true. Plain everyday language, no jargon. Like explaining to a curious friend.",
+  "context": "1 sentence of broader biological or medical context — where does this fit in the bigger picture?",
+  "caveats": "Any important nuances or exceptions worth knowing — or null if none"
+}`
+    }]
+  })
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+
+  let parsed: {
+    explanation: string
+    context: string
+    caveats: string | null
+  }
+
+  try {
+    parsed = JSON.parse(stripMarkdownJson(text))
+  } catch {
+    parsed = {
+      explanation: 'This is a well-established scientific fact supported by foundational biology and medicine.',
+      context: 'This is foundational science — not a contested research question.',
+      caveats: null,
+    }
+  }
+
+  return {
+    label: 'Established Science',
+    explanation: parsed.explanation,
+    evidenceSummary: 'This is foundational science — not a contested research question.',
+    caveats: parsed.caveats ?? null,
+    consensusNote: null,
+    context: parsed.context ?? null,
+    sources: [],
+    extractedClaim,
+  }
+}
