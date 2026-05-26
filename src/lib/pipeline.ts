@@ -10,6 +10,7 @@ function stripMarkdownJson(text: string): string {
 // Step 1: validate this is a health claim and extract the core assertion
 export async function extractAndValidateClaim(userInput: string): Promise<{
   isHealthClaim: boolean
+  claimType: 'established' | 'research'
   extractedClaim: string
   searchQueries: string[]
   reason?: string
@@ -19,7 +20,7 @@ export async function extractAndValidateClaim(userInput: string): Promise<{
     max_tokens: 600,
     messages: [{
       role: 'user',
-      content: `You are a claim analysis assistant. Your job is to determine if the following input contains a health or medical claim, and if so, extract it cleanly.
+      content: `You are a claim analysis assistant. Your job is to determine if the following input contains a health or medical claim, and if so, extract it cleanly and classify it.
 
 A health claim is any assertion about:
 - Effects of food, drink, supplements, or substances on the body
@@ -29,11 +30,16 @@ A health claim is any assertion about:
 - Mental health interventions
 - Nutritional science
 
+You must also classify the claim type:
+- "established": foundational biology or medicine that any textbook states without a citation — not a contested research question. Examples: "humans need water", "smoking causes cancer", "sleep is important for health", "exercise benefits the heart".
+- "research": a specific claim about an intervention, dose, association, or causation that requires study evidence to verify. Examples: "coffee prevents Alzheimer's", "vitamin D cures depression", "2 litres per day is optimal". When uncertain, use "research". Contested claims (e.g. anti-vaccine claims, alternative medicine) are always "research".
+
 User input: "${userInput}"
 
 Respond ONLY with a JSON object, no markdown:
 {
   "isHealthClaim": true/false,
+  "claimType": "established" or "research",
   "extractedClaim": "the core falsifiable claim in one clear sentence, or empty string if not a health claim",
   "searchQueries": [
     "specific MeSH/clinical PubMed query using MeSH terms where appropriate",
@@ -51,9 +57,12 @@ Respond ONLY with a JSON object, no markdown:
     if (!Array.isArray(parsed.searchQueries)) {
       parsed.searchQueries = parsed.searchQuery ? [parsed.searchQuery] : []
     }
+    if (parsed.claimType !== 'established' && parsed.claimType !== 'research') {
+      parsed.claimType = 'research'
+    }
     return parsed
   } catch {
-    return { isHealthClaim: false, extractedClaim: '', searchQueries: [], reason: 'Could not parse claim.' }
+    return { isHealthClaim: false, claimType: 'research', extractedClaim: '', searchQueries: [], reason: 'Could not parse claim.' }
   }
 }
 

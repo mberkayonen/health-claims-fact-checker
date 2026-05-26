@@ -67,6 +67,70 @@ describe('extractAndValidateClaim', () => {
     expect(result.isHealthClaim).toBe(false)
     expect(result.searchQueries).toEqual([])
   })
+
+  it('returns claimType established for a basic biology claim', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          isHealthClaim: true,
+          claimType: 'established',
+          extractedClaim: 'Humans need water to survive',
+          searchQueries: [
+            'water human physiology requirements',
+            'hydration human body necessity',
+            'water intake survival guidelines',
+          ],
+        }),
+      }],
+    })
+
+    const result = await extractAndValidateClaim('humans need water')
+
+    expect(result.isHealthClaim).toBe(true)
+    expect(result.claimType).toBe('established')
+  })
+
+  it('returns claimType research for a nuanced intervention claim', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          isHealthClaim: true,
+          claimType: 'research',
+          extractedClaim: "Coffee prevents Alzheimer's disease",
+          searchQueries: [
+            "coffee Alzheimer's prevention[MeSH]",
+            'caffeine cognitive decline risk',
+            "coffee dementia prevention guidelines",
+          ],
+        }),
+      }],
+    })
+
+    const result = await extractAndValidateClaim("coffee prevents Alzheimer's")
+
+    expect(result.isHealthClaim).toBe(true)
+    expect(result.claimType).toBe('research')
+  })
+
+  it('defaults claimType to research when Claude omits the field', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          isHealthClaim: true,
+          extractedClaim: 'Some health claim',
+          searchQueries: ['query one', 'query two', 'query three'],
+          // claimType deliberately omitted
+        }),
+      }],
+    })
+
+    const result = await extractAndValidateClaim('some health claim')
+
+    expect(result.claimType).toBe('research')
+  })
 })
 
 function makeSource(id: string, abstract: string): Source {
