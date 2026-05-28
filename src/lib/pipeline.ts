@@ -42,9 +42,9 @@ Respond ONLY with a JSON object, no markdown:
   "claimType": "established" or "research",
   "extractedClaim": "the core falsifiable claim in one clear sentence, or empty string if not a health claim",
   "searchQueries": [
-    "specific MeSH/clinical PubMed query using MeSH terms where appropriate",
+    "specific plain-language query using the exact clinical/medical terms that research papers use for this topic",
     "broader synonym-based query covering alternative terminology for the same concept",
-    "guideline or recommendation-focused query (e.g. including terms like guidelines, recommendations, consensus)"
+    "systematic review or guideline-focused query (e.g. including terms like systematic review, meta-analysis, guidelines)"
   ],
   "reason": "if not a health claim, briefly explain why"
 }`
@@ -161,7 +161,9 @@ Respond ONLY with a JSON object, no markdown:
     caveats: parsed.caveats ?? null,
     consensusNote: parsed.consensusNote ?? null,
     context: null,
-    sources: relevantSources.length > 0 ? relevantSources : sources.slice(0, 3),
+    // Only show sources Claude identified as relevant. If none were relevant,
+  // return an empty array — showing random fallback sources is misleading.
+  sources: relevantSources,
     extractedClaim,
   }
 }
