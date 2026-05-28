@@ -34,7 +34,55 @@ describe('POST /api/check', () => {
     vi.clearAllMocks()
   })
 
-  it('calls generateEstablishedVerdict and skips search for established claims', async () => {
+  it('calls generateEstablishedVerdict in parallel with search and attaches sources', async () => {
+    mockExtractAndValidateClaim.mockResolvedValueOnce({
+      isHealthClaim: true,
+      claimType: 'established',
+      extractedClaim: 'Humans need water to survive',
+      searchQueries: ['water physiology'],
+    })
+
+    const establishedVerdict = {
+      label: 'Established Science' as const,
+      explanation: 'Water is essential for life.',
+      evidenceSummary: 'This is foundational science — not a contested research question.',
+      caveats: null,
+      consensusNote: null,
+      context: 'Foundational human physiology.',
+      sources: [],
+      extractedClaim: 'Humans need water to survive',
+    }
+
+    const furtherReadingSources = [{
+      id: 'pm1',
+      title: 'Water and human health',
+      authors: [],
+      journal: 'Nature',
+      year: 2020,
+      abstract: 'Abstract',
+      url: 'http://pubmed.example.com/1',
+      source: 'PubMed' as const,
+      evidenceTier: 'Clinical Trial' as const,
+    }]
+
+    mockGenerateEstablishedVerdict.mockResolvedValueOnce(establishedVerdict)
+    mockSearchPubMed.mockResolvedValue(furtherReadingSources)
+    mockSearchCochrane.mockResolvedValue([])
+    mockSearchWhoIris.mockResolvedValue([])
+    mockDeduplicateSources.mockReturnValue(furtherReadingSources)
+
+    const res = await POST(makeRequest({ claim: 'humans need water' }))
+    const body = await res.json()
+
+    expect(body.success).toBe(true)
+    expect(body.verdict.label).toBe('Established Science')
+    expect(mockGenerateEstablishedVerdict).toHaveBeenCalledWith('Humans need water to survive')
+    expect(mockSearchPubMed).toHaveBeenCalled()
+    expect(body.verdict.sources).toEqual(furtherReadingSources)
+    expect(mockGenerateVerdict).not.toHaveBeenCalled()
+  })
+
+  it('returns established verdict with empty sources when search fails', async () => {
     mockExtractAndValidateClaim.mockResolvedValueOnce({
       isHealthClaim: true,
       claimType: 'established',
@@ -54,15 +102,17 @@ describe('POST /api/check', () => {
     }
 
     mockGenerateEstablishedVerdict.mockResolvedValueOnce(establishedVerdict)
+    mockSearchPubMed.mockRejectedValueOnce(new Error('Network error'))
+    mockSearchCochrane.mockResolvedValue([])
+    mockSearchWhoIris.mockResolvedValue([])
 
     const res = await POST(makeRequest({ claim: 'humans need water' }))
     const body = await res.json()
 
     expect(body.success).toBe(true)
     expect(body.verdict.label).toBe('Established Science')
-    expect(mockGenerateEstablishedVerdict).toHaveBeenCalledWith('Humans need water to survive')
-    expect(mockSearchPubMed).not.toHaveBeenCalled()
-    expect(mockSearchCochrane).not.toHaveBeenCalled()
+    expect(body.verdict.sources).toEqual([])
+    expect(mockSearchPubMed).toHaveBeenCalled()
     expect(mockGenerateVerdict).not.toHaveBeenCalled()
   })
 

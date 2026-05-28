@@ -40,11 +40,44 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       )
     }
 
-    // Fast path: established science needs no literature search
+    // Established path: verdict from Claude parametric knowledge, sources fetched in
+    // parallel as further reading. Search failure is non-fatal — verdict still returns.
     if (claimType === 'established') {
       try {
-        const verdict = await generateEstablishedVerdict(extractedClaim)
-        return NextResponse.json({ success: true, verdict })
+        const [verdictSettled, sourcesSettled] = await Promise.allSettled([
+          generateEstablishedVerdict(extractedClaim),
+          (async () => {
+            const allResults = await Promise.all(
+              searchQueries.flatMap(query => [
+                searchPubMed(query),
+                searchCochrane(query),
+                searchWhoIris(query),
+              ])
+            )
+            const pubmedBatches = allResults.filter((_, i) => i % 3 === 0)
+            const cochraneBatches = allResults.filter((_, i) => i % 3 === 1)
+            const whoBatches = allResults.filter((_, i) => i % 3 === 2)
+            return deduplicateSources([
+              ...cochraneBatches.flat(),
+              ...pubmedBatches.flat(),
+              ...whoBatches.flat(),
+            ])
+          })(),
+        ])
+
+        if (verdictSettled.status === 'rejected') throw verdictSettled.reason
+
+        const furtherReadingSources = sourcesSettled.status === 'fulfilled'
+          ? sourcesSettled.value
+          : []
+        if (sourcesSettled.status === 'rejected') {
+          console.error('Further reading search failed for established claim:', sourcesSettled.reason)
+        }
+
+        return NextResponse.json({
+          success: true,
+          verdict: { ...verdictSettled.value, sources: furtherReadingSources },
+        })
       } catch (err) {
         console.error('Established verdict failed, falling back to research pipeline:', err)
         // fall through to research pipeline below
