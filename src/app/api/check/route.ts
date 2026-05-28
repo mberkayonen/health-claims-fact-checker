@@ -4,9 +4,31 @@ import { searchPubMed } from '@/lib/pubmed'
 import { searchCochrane } from '@/lib/cochrane'
 import { searchWhoIris } from '@/lib/whoiris'
 import { deduplicateSources } from '@/lib/sources'
-import { CheckResponse } from '@/lib/types'
+import { CheckResponse, Source } from '@/lib/types'
 
 export const maxDuration = 60
+
+// Fan out across 3 sources × N queries in parallel, then dedup.
+// Order within each group is [PubMed, Cochrane, WHO] so the i % 3 split
+// below correctly separates them. Cochrane listed first in the merge so
+// deduplicateSources gives it precedence over PubMed for the same PMID.
+async function runLiteratureSearch(searchQueries: string[]): Promise<Source[]> {
+  const allResults = await Promise.all(
+    searchQueries.flatMap(query => [
+      searchPubMed(query),
+      searchCochrane(query),
+      searchWhoIris(query),
+    ])
+  )
+  const pubmedBatches = allResults.filter((_, i) => i % 3 === 0)
+  const cochraneBatches = allResults.filter((_, i) => i % 3 === 1)
+  const whoBatches = allResults.filter((_, i) => i % 3 === 2)
+  return deduplicateSources([
+    ...cochraneBatches.flat(),
+    ...pubmedBatches.flat(),
+    ...whoBatches.flat(),
+  ])
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse>> {
   try {
@@ -46,23 +68,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       try {
         const [verdictSettled, sourcesSettled] = await Promise.allSettled([
           generateEstablishedVerdict(extractedClaim),
-          (async () => {
-            const allResults = await Promise.all(
-              searchQueries.flatMap(query => [
-                searchPubMed(query),
-                searchCochrane(query),
-                searchWhoIris(query),
-              ])
-            )
-            const pubmedBatches = allResults.filter((_, i) => i % 3 === 0)
-            const cochraneBatches = allResults.filter((_, i) => i % 3 === 1)
-            const whoBatches = allResults.filter((_, i) => i % 3 === 2)
-            return deduplicateSources([
-              ...cochraneBatches.flat(),
-              ...pubmedBatches.flat(),
-              ...whoBatches.flat(),
-            ])
-          })(),
+          runLiteratureSearch(searchQueries),
         ])
 
         if (verdictSettled.status === 'rejected') throw verdictSettled.reason
@@ -84,28 +90,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       }
     }
 
-    // Research path: fan out across 3 sources × N queries in parallel.
-    // Order within each group is [PubMed, Cochrane, WHO] so the index modulo
-    // pattern below correctly separates them for Cochrane-precedence dedup.
-    const allResults = await Promise.all(
-      searchQueries.flatMap(query => [
-        searchPubMed(query),
-        searchCochrane(query),
-        searchWhoIris(query),
-      ])
-    )
-
-    const pubmedBatches = allResults.filter((_, i) => i % 3 === 0)
-    const cochraneBatches = allResults.filter((_, i) => i % 3 === 1)
-    const whoBatches = allResults.filter((_, i) => i % 3 === 2)
-
-    // Cochrane listed first so deduplicateSources gives it precedence over PubMed
-    const sources = deduplicateSources([
-      ...cochraneBatches.flat(),
-      ...pubmedBatches.flat(),
-      ...whoBatches.flat(),
-    ])
-
+    // Research path
+    const sources = await runLiteratureSearch(searchQueries)
     const verdict = await generateVerdict(extractedClaim, sources)
 
     return NextResponse.json({ success: true, verdict })
