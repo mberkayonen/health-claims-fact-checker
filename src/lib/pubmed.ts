@@ -31,7 +31,7 @@ function inferEvidenceTier(pubtypes: string[]): Source['evidenceTier'] {
 }
 
 export async function fetchPubMedByQuery(query: string, maxResults: number): Promise<RawPubMedArticle[]> {
-  const searchUrl = `${PUBMED_BASE}/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=${maxResults}&retmode=json&sort=relevance`
+  const searchUrl = `${PUBMED_BASE}/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query + ' AND hasabstract[text]')}&retmax=${maxResults}&retmode=json&sort=relevance`
   const searchRes = await fetch(searchUrl)
   const searchData = await searchRes.json()
   const ids: string[] = searchData?.esearchresult?.idlist ?? []
@@ -81,7 +81,7 @@ export async function fetchPubMedByQuery(query: string, maxResults: number): Pro
 
 export async function searchPubMed(query: string): Promise<Source[]> {
   try {
-    const articles = await fetchPubMedByQuery(query, 5)
+    const articles = await fetchPubMedByQuery(query, 8)
     return articles.map(a => ({
       ...a,
       url: `https://pubmed.ncbi.nlm.nih.gov/${a.id}/`,
