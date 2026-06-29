@@ -5,6 +5,7 @@ import { searchCochrane } from '@/lib/cochrane'
 import { searchWhoIris } from '@/lib/whoiris'
 import { deduplicateSources } from '@/lib/sources'
 import { CheckResponse, Source } from '@/lib/types'
+import langfuse from '@/lib/langfuse'
 
 export const maxDuration = 60
 
@@ -31,9 +32,11 @@ async function runLiteratureSearch(searchQueries: string[]): Promise<Source[]> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse>> {
-  try {
-    const { claim } = await req.json()
+  const { claim } = await req.json().catch(() => ({ claim: null }))
 
+  const trace = langfuse?.trace({ name: 'check-claim', input: { claim } }) ?? null
+
+  try {
     if (!claim || typeof claim !== 'string' || claim.trim().length < 10) {
       return NextResponse.json(
         { success: false, error: 'Please enter a health claim to check.' },
@@ -49,9 +52,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
     }
 
     const { isHealthClaim, claimType, extractedClaim, searchQueries, reason } =
-      await extractAndValidateClaim(claim.trim())
+      await extractAndValidateClaim(claim.trim(), trace)
 
     if (!isHealthClaim) {
+      trace?.update({ output: { isHealthClaim: false, reason } })
       return NextResponse.json(
         {
           success: false,
@@ -67,7 +71,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
     if (claimType === 'established') {
       try {
         const [verdictSettled, sourcesSettled] = await Promise.allSettled([
-          generateEstablishedVerdict(extractedClaim),
+          generateEstablishedVerdict(extractedClaim, trace),
           runLiteratureSearch(searchQueries),
         ])
 
@@ -80,10 +84,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
           console.error('Further reading search failed for established claim:', sourcesSettled.reason)
         }
 
-        return NextResponse.json({
-          success: true,
-          verdict: { ...verdictSettled.value, sources: furtherReadingSources },
-        })
+        const verdict = { ...verdictSettled.value, sources: furtherReadingSources }
+        trace?.update({ output: { label: verdict.label } })
+        return NextResponse.json({ success: true, verdict })
       } catch (err) {
         console.error('Established verdict failed, falling back to research pipeline:', err)
         // fall through to research pipeline below
@@ -92,14 +95,18 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
 
     // Research path
     const sources = await runLiteratureSearch(searchQueries)
-    const verdict = await generateVerdict(extractedClaim, sources)
+    const verdict = await generateVerdict(extractedClaim, sources, trace)
 
+    trace?.update({ output: { label: verdict.label, sourceCount: verdict.sources.length } })
     return NextResponse.json({ success: true, verdict })
   } catch (err) {
     console.error('Check API error:', err)
+    trace?.update({ output: { error: 'internal error' } })
     return NextResponse.json(
       { success: false, error: 'Something went wrong. Please try again.' },
       { status: 500 }
     )
+  } finally {
+    langfuse?.flushAsync().catch(console.error)
   }
 }

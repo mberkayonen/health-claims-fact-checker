@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { Source, Verdict, VerdictLabel } from './types'
+import type { LangfuseTrace } from './langfuse'
 
 const client = new Anthropic()
 
@@ -8,19 +9,19 @@ function stripMarkdownJson(text: string): string {
 }
 
 // Step 1: validate this is a health claim and extract the core assertion
-export async function extractAndValidateClaim(userInput: string): Promise<{
+export async function extractAndValidateClaim(
+  userInput: string,
+  trace?: LangfuseTrace | null,
+): Promise<{
   isHealthClaim: boolean
   claimType: 'established' | 'research'
   extractedClaim: string
   searchQueries: string[]
   reason?: string
 }> {
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 600,
-    messages: [{
-      role: 'user',
-      content: `You are a claim analysis assistant. Your job is to determine if the following input contains a health or medical claim, and if so, extract it cleanly and classify it.
+  const messages: Anthropic.MessageParam[] = [{
+    role: 'user',
+    content: `You are a claim analysis assistant. Your job is to determine if the following input contains a health or medical claim, and if so, extract it cleanly and classify it.
 
 A health claim is any assertion about:
 - Effects of food, drink, supplements, or substances on the body
@@ -48,10 +49,26 @@ Respond ONLY with a JSON object, no markdown:
   ],
   "reason": "if not a health claim, briefly explain why"
 }`
-    }]
+  }]
+
+  const generation = trace?.generation({
+    name: 'extract-validate-claim',
+    model: 'claude-sonnet-4-6',
+    input: messages,
+  })
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 600,
+    messages,
   })
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
+
+  generation?.end({
+    output: text,
+    usage: { input: response.usage.input_tokens, output: response.usage.output_tokens },
+  })
   try {
     const parsed = JSON.parse(stripMarkdownJson(text))
     if (!Array.isArray(parsed.searchQueries)) {
@@ -71,7 +88,8 @@ export const MIN_SOURCES_FOR_VERDICT = 3
 // Step 2: generate verdict from retrieved sources
 export async function generateVerdict(
   extractedClaim: string,
-  sources: Source[]
+  sources: Source[],
+  trace?: LangfuseTrace | null,
 ): Promise<Verdict> {
   const sourcesContext = sources.map((s, i) => `
 SOURCE ${i + 1}:
@@ -89,10 +107,7 @@ URL: ${s.url}
     ? `\nIf the retrieved sources are insufficient to reach a verdict, you MAY add a brief "consensusNote" drawing on well-established scientific consensus — but ONLY for claims where consensus is genuinely unambiguous and widely accepted. Clearly label it as not from the retrieved sources. If no clear consensus exists, set consensusNote to null.`
     : ''
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1500,
-    system: `You are a scientific fact-checker. Your ONLY job is to assess health claims based strictly on the provided scientific sources.
+  const systemPrompt = `You are a scientific fact-checker. Your ONLY job is to assess health claims based strictly on the provided scientific sources.
 
 CRITICAL RULES:
 - You may ONLY use the provided sources. Do not use any other knowledge.
@@ -100,10 +115,11 @@ CRITICAL RULES:
 - Never fabricate or embellish findings.
 - Use plain, everyday language in explanations — avoid jargon.
 - Be honest about uncertainty and limitations.
-- Evidence tiers matter: Systematic Reviews > Clinical Trials > Observational Studies > Expert Consensus.${consensusFallbackInstruction}`,
-    messages: [{
-      role: 'user',
-      content: `Assess this health claim based ONLY on the sources provided below.
+- Evidence tiers matter: Systematic Reviews > Clinical Trials > Observational Studies > Expert Consensus.${consensusFallbackInstruction}`
+
+  const verdictMessages: Anthropic.MessageParam[] = [{
+    role: 'user',
+    content: `Assess this health claim based ONLY on the sources provided below.
 
 CLAIM: "${extractedClaim}"
 
@@ -118,11 +134,28 @@ Respond ONLY with a JSON object, no markdown:
   "caveats": "Important limitations, caveats, or context the reader should know — or null if none",
   "consensusNote": "Brief plain-language note on scientific consensus if sources were insufficient — or null",
   "sourceIndices": [list of source index numbers (1-based) that were actually relevant to the verdict]
-}`
-    }]
+}`,
+  }]
+
+  const generation = trace?.generation({
+    name: 'generate-verdict',
+    model: 'claude-sonnet-4-6',
+    input: { system: systemPrompt, messages: verdictMessages },
+  })
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1500,
+    system: systemPrompt,
+    messages: verdictMessages,
   })
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
+
+  generation?.end({
+    output: text,
+    usage: { input: response.usage.input_tokens, output: response.usage.output_tokens },
+  })
 
   let parsed: {
     label: VerdictLabel
@@ -162,22 +195,21 @@ Respond ONLY with a JSON object, no markdown:
     consensusNote: parsed.consensusNote ?? null,
     context: null,
     // Only show sources Claude identified as relevant. If none were relevant,
-  // return an empty array — showing random fallback sources is misleading.
-  sources: relevantSources,
+    // return an empty array — showing random fallback sources is misleading.
+    sources: relevantSources,
     extractedClaim,
   }
 }
 
 export async function generateEstablishedVerdict(
-  extractedClaim: string
+  extractedClaim: string,
+  trace?: LangfuseTrace | null,
 ): Promise<Verdict> {
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 600,
-    system: `You are a friendly science communicator. Your job is to confirm well-established scientific facts in plain, accessible language for everyday people — not scientists. Be warm, clear, and informative.`,
-    messages: [{
-      role: 'user',
-      content: `Confirm this established health or biology fact and explain why it's true in plain language.
+  const establishedSystem = `You are a friendly science communicator. Your job is to confirm well-established scientific facts in plain, accessible language for everyday people — not scientists. Be warm, clear, and informative.`
+
+  const establishedMessages: Anthropic.MessageParam[] = [{
+    role: 'user',
+    content: `Confirm this established health or biology fact and explain why it's true in plain language.
 
 CLAIM: "${extractedClaim}"
 
@@ -186,11 +218,28 @@ Respond ONLY with a JSON object, no markdown:
   "explanation": "2-3 sentences confirming the claim and explaining why it's true. Plain everyday language, no jargon. Like explaining to a curious friend.",
   "context": "1 sentence of broader biological or medical context — where does this fit in the bigger picture?",
   "caveats": "Any important nuances or exceptions worth knowing — or null if none"
-}`
-    }]
+}`,
+  }]
+
+  const generation = trace?.generation({
+    name: 'generate-established-verdict',
+    model: 'claude-sonnet-4-6',
+    input: { system: establishedSystem, messages: establishedMessages },
+  })
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 600,
+    system: establishedSystem,
+    messages: establishedMessages,
   })
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
+
+  generation?.end({
+    output: text,
+    usage: { input: response.usage.input_tokens, output: response.usage.output_tokens },
+  })
 
   let parsed: {
     explanation: string
