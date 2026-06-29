@@ -107,6 +107,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       { status: 500 }
     )
   } finally {
-    langfuse?.flushAsync().catch(console.error)
+    await langfuse?.flushAsync()
   }
 }
