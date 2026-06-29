@@ -5,7 +5,7 @@ import { searchCochrane } from '@/lib/cochrane'
 import { searchWhoIris } from '@/lib/whoiris'
 import { deduplicateSources } from '@/lib/sources'
 import { CheckResponse, Source } from '@/lib/types'
-import langfuse from '@/lib/langfuse'
+import { createLangfuseClient } from '@/lib/langfuse'
 
 export const maxDuration = 60
 
@@ -34,7 +34,8 @@ async function runLiteratureSearch(searchQueries: string[]): Promise<Source[]> {
 export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse>> {
   const { claim } = await req.json().catch(() => ({ claim: null }))
 
-  const trace = langfuse?.trace({ name: 'check-claim', input: { claim } }) ?? null
+  const lf = createLangfuseClient()
+  const trace = lf?.trace({ name: 'check-claim', input: { claim } }) ?? null
 
   try {
     if (!claim || typeof claim !== 'string' || claim.trim().length < 10) {
@@ -107,6 +108,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse
       { status: 500 }
     )
   } finally {
-    await langfuse?.flushAsync().catch(err => console.error('[Langfuse] flush failed:', err))
+    await lf?.flushAsync().catch(err => console.error('[Langfuse] flush failed:', err))
   }
 }
