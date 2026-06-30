@@ -32,10 +32,10 @@ async function runLiteratureSearch(searchQueries: string[]): Promise<Source[]> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<CheckResponse>> {
-  const { claim } = await req.json().catch(() => ({ claim: null }))
+  const { claim, sessionId } = await req.json().catch(() => ({ claim: null, sessionId: undefined }))
 
   const lf = createLangfuseClient()
-  const trace = lf?.trace({ name: 'check-claim', input: { claim } }) ?? null
+  const trace = lf?.trace({ name: 'check-claim', sessionId, input: { claim } }) ?? null
 
   try {
     if (!claim || typeof claim !== 'string' || claim.trim().length < 10) {

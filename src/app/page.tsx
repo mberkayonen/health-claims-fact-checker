@@ -42,6 +42,15 @@ function LoadingSkeleton() {
   )
 }
 
+function getOrCreateSessionId(): string {
+  const key = 'hc_session_id'
+  const existing = sessionStorage.getItem(key)
+  if (existing) return existing
+  const id = crypto.randomUUID()
+  sessionStorage.setItem(key, id)
+  return id
+}
+
 export default function HomePage() {
   const [claim, setClaim] = useState('')
   const [state, setState] = useState<State>('idle')
@@ -57,7 +66,7 @@ export default function HomePage() {
       const res = await fetch('/api/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim: claim.trim() }),
+        body: JSON.stringify({ claim: claim.trim(), sessionId: getOrCreateSessionId() }),
       })
       const data: CheckResponse = await res.json()
       setResponse(data)
