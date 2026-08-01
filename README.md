@@ -4,8 +4,6 @@
 
 Paste a health claim from social media — HealthCheck searches PubMed's 35M+ biomedical papers and returns a transparent, sourced verdict in plain language.
 
-Live demo: [your-vercel-url.vercel.app]
-
 ---
 
 ## How it works
@@ -18,7 +16,7 @@ Live demo: [your-vercel-url.vercel.app]
 ## Tech stack
 
 - **Frontend**: Next.js 14 + Tailwind CSS
-- **LLM**: Anthropic Claude (claude-sonnet-4-20250514)
+- **LLM**: Anthropic Claude
 - **Data source**: PubMed / NCBI E-utilities API (free, no key required)
 - **Hosting**: Vercel (free tier)
 
@@ -34,8 +32,8 @@ Live demo: [your-vercel-url.vercel.app]
 
 ```bash
 # 1. Clone and install
-git clone [your-repo]
-cd healthcheck
+git clone https://github.com/mberkayonen/health-claims-fact-checker.git
+cd health-claims-fact-checker
 npm install
 
 # 2. Set up environment
@@ -61,14 +59,6 @@ vercel
 ```
 
 Or connect your GitHub repo to Vercel for automatic deployments.
-
-## Estimated running costs
-
-At low traffic (~100 checks/month):
-- Anthropic API: ~$2–5/month (two Claude calls per check)
-- Vercel: Free tier
-- PubMed API: Free
-- **Total: ~$2–5/month**
 
 ## Roadmap
 
