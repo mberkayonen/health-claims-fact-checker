@@ -4,6 +4,8 @@
 
 Paste a health claim from social media — HealthCheck searches PubMed's 35M+ biomedical papers and returns a transparent, sourced verdict in plain language.
 
+**Live:** https://claimcheck.beronen.tech
+
 ---
 
 ## How it works
@@ -27,38 +29,6 @@ Paste a health claim from social media — HealthCheck searches PubMed's 35M+ bi
 - **No training data for verdicts** — Claude is explicitly instructed to assess only from retrieved sources, not its own knowledge. Reduces hallucination risk significantly.
 - **Evidence tier labelling** — Sources are labelled by study type (Systematic Review > Clinical Trial > Observational Study). Users can see how strong the evidence base is.
 - **Honest uncertainty** — "Insufficient Evidence" is a first-class verdict, not a failure state.
-
-## Local development
-
-```bash
-# 1. Clone and install
-git clone https://github.com/mberkayonen/health-claims-fact-checker.git
-cd health-claims-fact-checker
-npm install
-
-# 2. Set up environment
-cp .env.example .env.local
-# Add your ANTHROPIC_API_KEY to .env.local
-
-# 3. Run dev server
-npm run dev
-# Open http://localhost:3000
-```
-
-## Deploy to Vercel
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-
-# Add your environment variable in Vercel dashboard:
-# ANTHROPIC_API_KEY = your key
-```
-
-Or connect your GitHub repo to Vercel for automatic deployments.
 
 ## Roadmap
 
